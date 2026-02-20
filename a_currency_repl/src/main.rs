@@ -21,7 +21,6 @@ Notes:
 use std::io::Write;
 
 
-
 fn main() {
     loop {
         print!("> ");
@@ -42,16 +41,113 @@ fn main() {
         // convert N USD to EUR
         // list currencies
 
+        #[derive(PartialEq)]
+        enum ParserStates {
+            Start,
+            ConvertStatement,
+            CommandInvocation,
+            Quantity,
+            End,
+        }
 
-        let currentState: ParserState = ParserState::Idle;
+        #[derive(PartialEq)]
+        enum ConvertStatement {
+            Idle,
+            From,
+            Connector,
+            To,
+            Fulfilled,
+        }
+
+        #[derive(PartialEq)]
+        enum CommandInvocation {
+            Idle,
+            Fulfilled,
+        }
+
+        let mut currency_from = String::new();
+        let mut currency_to = String::new();
+        let mut quantity = String::new();
+        let mut command = String::new();
+
+        let mut parser_state = ParserStates::Start;
+        let mut convert_state = ConvertStatement::Idle;
+        let mut command_state = CommandInvocation::Idle;
 
         let mut words_iterator = input_string.split_whitespace();
         while let Some(word) = words_iterator.next() {
-            let word_str: &str = word.as_ref();
-            
-            // match stuff or something
+
+            if let Ok(n) = word.parse::<f64>() {
+                quantity = n.to_string();
+                continue;
+            }
+            if word == "convert" {
+                if (command_state == CommandInvocation::Fulfilled) {
+                    // handle error
+                    break;
+                }
+                if (convert_state == ConvertStatement::Idle) {
+                    parser_state = ParserStates::ConvertStatement;
+                    convert_state = ConvertStatement::From;
+                }
+                command = word.to_string();
+                command_state = CommandInvocation::Fulfilled;
+                continue;
+            }
+
+            if word == "USD" && convert_state == ConvertStatement::Idle {
+                currency_from = word_str.to_string();
+                parser_state = ParserStates::ConvertStatement;
+                convert_state = ConvertStatement::Connector;
+                continue;
+            }
+
+            if (parser_state == ParserStates::ConvertStatement) {
+                if (convert_state == ConvertStatement::From) {
+                    if (word == "USD") {
+                        currency_from = word_str.to_string();
+                        convert_state = ConvertStatement::Connector;
+                        continue;
+                    }
+
+                    else {
+                        // handle error here
+                        break;
+                    }
+                }
+
+                if (convert_state == ConvertStatement::Connector) {
+                    if (word == "to") {
+                        convert_state = ConvertStatement::To;
+                        continue;
+                    }
+
+                    else {
+                        // handle invalid token here
+                        break;
+                    }
+                }
+
+                if (convert_state == ConvertStatement::To) {
+                    if (word == "USD") {
+                        currency_to = word_str.to_string();
+                        convert_state = ConvertStatement::Fulfilled;
+                        continue;
+                    }
+
+                    else {
+                        // handle invalid token here
+                        break;
+                    }
+                }
+            }
             
         }
+            println!("currency from: {}", currency_from);
+            println!("currency to: {}", currency_to);
+            println!("quantity = {}", quantity);
+            println!("command: {}", command);
+
 
     }
 }
@@ -62,4 +158,5 @@ Exercise log:
 -> googled: method for splitting strings on space Rust
 --> found split_whitespace method, returns an iterator hmmm
 --> multiple ways to collect that shiz
+--> I'll just iterate through it explicitly
 */
