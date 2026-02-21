@@ -19,9 +19,50 @@ Notes:
 */
 
 use std::io::Write;
-
+use serde::Deserialize;
+use serde_json::Value;
 
 fn main() {
+    // make environment variables available
+    dotenv::dotenv().ok();
+
+    // synchronous request to get available currencies from API
+    let available_currencies = match get_available_currencies() {
+        Ok(available_currencies) => available_currencies,
+        Err(e) => {
+            eprintln!("Failed: {:?}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let is_currency = |word: &str| available_currencies.iter().any(|c| c == word);
+
+
+    #[derive(PartialEq)]
+    enum ParserStates {
+        Start,
+        ConvertStatement,
+        CommandInvocation,
+        Quantity,
+        End,
+    }
+
+    #[derive(PartialEq)]
+    enum ConvertStatement {
+        Idle,
+        From,
+        Connector,
+        To,
+        Fulfilled,
+    }
+
+    #[derive(PartialEq)]
+    enum CommandInvocation {
+        Idle,
+        Fulfilled,
+    }
+
+    // REPL loop
     loop {
         print!("> ");
         match std::io::stdout().flush() {
@@ -40,30 +81,6 @@ fn main() {
 
         // convert N USD to EUR
         // list currencies
-
-        #[derive(PartialEq)]
-        enum ParserStates {
-            Start,
-            ConvertStatement,
-            CommandInvocation,
-            Quantity,
-            End,
-        }
-
-        #[derive(PartialEq)]
-        enum ConvertStatement {
-            Idle,
-            From,
-            Connector,
-            To,
-            Fulfilled,
-        }
-
-        #[derive(PartialEq)]
-        enum CommandInvocation {
-            Idle,
-            Fulfilled,
-        }
 
         let mut currency_from = String::new();
         let mut currency_to = String::new();
@@ -95,8 +112,9 @@ fn main() {
                 continue;
             }
 
-            if word == "USD" && convert_state == ConvertStatement::Idle {
-                currency_from = word_str.to_string();
+            if is_currency(word) && convert_state == ConvertStatement::Idle 
+            {
+                currency_from = word.to_string();
                 parser_state = ParserStates::ConvertStatement;
                 convert_state = ConvertStatement::Connector;
                 continue;
@@ -104,8 +122,8 @@ fn main() {
 
             if (parser_state == ParserStates::ConvertStatement) {
                 if (convert_state == ConvertStatement::From) {
-                    if (word == "USD") {
-                        currency_from = word_str.to_string();
+                    if (is_currency(word)) {
+                        currency_from = word.to_string();
                         convert_state = ConvertStatement::Connector;
                         continue;
                     }
@@ -129,8 +147,8 @@ fn main() {
                 }
 
                 if (convert_state == ConvertStatement::To) {
-                    if (word == "USD") {
-                        currency_to = word_str.to_string();
+                    if (is_currency(word)) {
+                        currency_to = word.to_string();
                         convert_state = ConvertStatement::Fulfilled;
                         continue;
                     }
@@ -152,11 +170,33 @@ fn main() {
     }
 }
 
-/*
-Exercise log:
--> googled: flush buffer with Rust, found out it was on the Write trait duh
--> googled: method for splitting strings on space Rust
---> found split_whitespace method, returns an iterator hmmm
---> multiple ways to collect that shiz
---> I'll just iterate through it explicitly
-*/
+#[derive(Debug)]
+enum ApiError {
+    Failed,
+}
+
+
+#[derive(Deserialize)]
+struct Response {
+    data: std::collections::HashMap<String, serde_json::Value>
+}
+
+fn get_available_currencies() -> Result<Vec<String>, ApiError> {
+    let api_key = std::env::var("API_KEY").expect("API_KEY not set");
+    let base_url = std::env::var("BASE_URL").expect("BASE_URL not set");
+    let url = format!("{}currencies?apikey={}&currencies=&base_currency=BGN", base_url, api_key);
+    let mut response = match reqwest::blocking::get(&url) {
+        Ok(v) => v,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    let body: Response = match response.json() {
+        Ok(v) => v,
+        Err(e) => return Err(ApiError::Failed),
+    };
+
+    let codes: Vec<String> = body.data.keys().cloned().collect();
+
+    return Ok(codes);
+
+}
