@@ -1,23 +1,3 @@
-/*
-
-Goal: make REPL that converts currency using a currency conversion API 
-
-fn main:
--> contains REPL loop
--> parses inputs for args by splitting on space
--> returns informative error if command is trash
--> calls synchronous function to make request with args
-
-fn convert_currency():
--> makes blocking get request with reqwest
--> returns result type that contains the converted currency or an informative error
-
-Notes:
-- use explicit matching on results, no sugar
-- use custom enum for E in the Result<T, E> returned by convert_currency()
-
-*/
-
 use std::io::Write;
 use serde::Deserialize;
 use serde_json::Value;
@@ -36,7 +16,6 @@ fn main() {
     };
 
     let is_currency = |word: &str| available_currencies.iter().any(|c| c == word);
-
 
     #[derive(PartialEq)]
     enum ParserStates {
@@ -166,6 +145,20 @@ fn main() {
             println!("quantity = {}", quantity);
             println!("command: {}", command);
 
+            let quantity = match quantity.parse::<f64>() {
+                Ok(v) => v,
+                Err(e) => panic!("{}", e)
+            };
+
+            match get_converted_currency(quantity, currency_from, currency_to) {
+                Ok(v) => {
+                    println!("{}", v)
+                },
+                Err(e) => {
+                    println!("{:?}", e)
+                }
+            }
+
 
     }
 }
@@ -184,7 +177,7 @@ struct Response {
 fn get_available_currencies() -> Result<Vec<String>, ApiError> {
     let api_key = std::env::var("API_KEY").expect("API_KEY not set");
     let base_url = std::env::var("BASE_URL").expect("BASE_URL not set");
-    let url = format!("{}currencies?apikey={}&currencies=&base_currency=BGN", base_url, api_key);
+    let url = format!("{}currencies?apikey={}", base_url, api_key);
     let mut response = match reqwest::blocking::get(&url) {
         Ok(v) => v,
         Err(e) => panic!("{:?}", e),
@@ -199,4 +192,36 @@ fn get_available_currencies() -> Result<Vec<String>, ApiError> {
 
     return Ok(codes);
 
+}
+
+fn get_converted_currency(
+    quantity: f64, currency_from: String, currency_to: String) -> Result<f64, ApiError> {
+
+    let api_key = std::env::var("API_KEY").expect("API_KEY not set");
+    let base_url = std::env::var("BASE_URL").expect("BASE_URL not set");
+    let url = format!(
+        "{}latest?apikey={}&currencies={}&base_currency={}", base_url, api_key, currency_to, currency_from
+    );
+
+    let mut response = match reqwest::blocking::get(&url) {
+        Ok(v) => v,
+        Err(e) => return Err(ApiError::Failed),
+    };
+
+    let body: Response = match response.json() {
+        Ok(v) => v,
+        Err(e) => return Err(ApiError::Failed),
+    };
+    
+    let converted_value = match body.data.get(&currency_to) {
+        Some(serde_json::Value::Number(n)) => {
+            match n.as_f64() {
+                Some(v) => v * quantity,
+                None => return Err(ApiError::Failed),
+            }
+        }
+        Some(_) => return Err(ApiError::Failed), // key exists, but not a number
+        None => return Err(ApiError::Failed),   // key does not exist
+};
+    return Ok(converted_value);
 }
