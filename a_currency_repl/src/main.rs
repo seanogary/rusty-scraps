@@ -58,6 +58,9 @@ fn main() {
             Err(e) => panic!("{:?}", e),
         };
 
+        if (input_string.trim() == "quit") {
+            std::process::exit(0);
+        }
         // convert N USD to EUR
         // list currencies
 
@@ -77,6 +80,7 @@ fn main() {
                 quantity = n.to_string();
                 continue;
             }
+
             if word == "convert" {
                 if (command_state == CommandInvocation::Fulfilled) {
                     // handle error

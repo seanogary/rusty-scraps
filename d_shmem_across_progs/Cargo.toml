@@ -1,0 +1,23 @@
+[package]
+name = "d_shmem_across_progs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nix = { version = "0.31.1", features = ["mman", "fs"] }
+
+[[bin]]
+name = "create"
+path = "src/create.rs"
+
+[[bin]]
+name = "read"
+path = "src/read.rs"
+
+[[bin]]
+name = "cleanup"
+path = "src/cleanup.rs"
+
+[[bin]]
+name = "write"
+path = "src/write.rs"
